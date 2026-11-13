@@ -79,5 +79,37 @@ class NotifierService {
   }
 }
 
+  /**
+   * Отправить сообщение конкретному пользователю по chat_id
+   */
+  async sendTo(chatId, text) {
+    if (!CONFIG.BOT_TOKEN) return false;
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true
+        })
+      });
+      const d = await r.json();
+      return d.ok;
+    } catch { return false; }
+  }
+
+  /**
+   * Отправить одно и то же сообщение обоим пользователям
+   */
+  async sendToBoth(text) {
+    const results = await Promise.all(
+      CONFIG.ALLOWED_USERS.map(u => this.sendTo(u.id, text))
+    );
+    return results;
+  }
+}
+
 window.notifier = new NotifierService();
 
