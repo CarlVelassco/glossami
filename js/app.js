@@ -357,18 +357,31 @@ class App {
     const onlineLabel = myRole === "him" ? "Онлайн сейчас 🟢" : "Онлайн сейчас 🟢";
 
     // Сохранить собственное присутствие
-    const saveMyPresence = async () => {
+    const saveMyPresence = async (isOnline = true) => {
       await window.storage.set(`presence_${myRole}`, {
         name: this.currentUser.name,
         timestamp: Date.now(),
-        online: true
+        online: isOnline
       });
     };
 
+    // Подключение к Firebase onDisconnect (если приложение просто закрыли или свернули)
+    if (window.storage?.firebaseDb) {
+      try {
+        const myPresenceRef = window.storage.firebaseDb.ref(`shared/presence_${myRole}`);
+        myPresenceRef.onDisconnect().set({
+          name: this.currentUser.name,
+          timestamp: Date.now(),
+          online: false
+        });
+      } catch (e) {
+        console.warn("[App] onDisconnect setup error:", e);
+      }
+    }
+
     // Прочитать присутствие партнёра и обновить UI
     let partnerWasOnline = false;
-    const updatePartnerStatus = async () => {
-      const presence = await window.storage.get(`presence_${partnerRole}`, null);
+    const renderPresenceUI = (presence) => {
       const statusEl = document.getElementById("partner-presence-status");
       if (!statusEl) return;
 
@@ -381,56 +394,73 @@ class App {
       const diffMs = Date.now() - presence.timestamp;
       const diffMin = Math.floor(diffMs / 60000);
       const diffHours = Math.floor(diffMs / 3600000);
-      const isOnlineNow = diffMin < 2;
+      
+      // Онлайн если флаг online === true И отметка обновлена менее 3 минут назад
+      const isOnlineNow = presence.online === true && diffMs < 180000;
 
-      // Если партнёр только что пришёл онлайн — показываем тост
+      // Если партнёр только что пришёл онлайн в реальном времени — показываем тост
       if (isOnlineNow && !partnerWasOnline) {
-        window.showToast(`💚 ${partnerUser.name} сейчас онлайн!`, "love", 3500);
+        window.showToast(`💚 ${partnerUser.name} сейчас в приложении!`, "love", 3500);
         if (window.Telegram?.WebApp?.HapticFeedback) {
           window.Telegram.WebApp.HapticFeedback.notificationOccurred("success");
         }
+      } else if (!isOnlineNow && partnerWasOnline) {
+        // Партнер только что вышел
+        window.showToast(`👋 ${partnerUser.name} только что вышел(ла)`, "info", 2500);
       }
       partnerWasOnline = isOnlineNow;
 
       if (isOnlineNow) {
-        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1"></span>${onlineLabel}`;
-        document.getElementById("partner-presence-pill")?.classList.add("ring-1", "ring-emerald-400/40");
-      } else if (diffMin < 60) {
-        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1"></span>${wasLabel} ${diffMin} мин. назад`;
-        document.getElementById("partner-presence-pill")?.classList.remove("ring-1", "ring-emerald-400/40");
-      } else if (diffHours < 24) {
-        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1"></span>${wasLabel} ${diffHours} ч. назад`;
-        document.getElementById("partner-presence-pill")?.classList.remove("ring-1", "ring-emerald-400/40");
+        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1"></span>Онлайн сейчас 🟢`;
+        document.getElementById("partner-presence-pill")?.classList.add("ring-2", "ring-emerald-400/50");
       } else {
-        const date = new Date(presence.timestamp).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-300 mr-1"></span>${wasLabel} ${date}`;
-        document.getElementById("partner-presence-pill")?.classList.remove("ring-1", "ring-emerald-400/40");
+        document.getElementById("partner-presence-pill")?.classList.remove("ring-2", "ring-emerald-400/50");
+        if (diffMin < 1) {
+          statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1"></span>Вышел(ла) только что`;
+        } else if (diffMin < 60) {
+          statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1"></span>${wasLabel} ${diffMin} мин. назад`;
+        } else if (diffHours < 24) {
+          statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1"></span>${wasLabel} ${diffHours} ч. назад`;
+        } else {
+          const date = new Date(presence.timestamp).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-300 mr-1"></span>${wasLabel} ${date}`;
+        }
       }
     };
 
+    // Слушаем изменение статуса партнера В РЕАЛЬНОМ ВРЕМЕНИ через сокеты Firebase
+    window.storage.subscribe(`presence_${partnerRole}`, (presence) => {
+      renderPresenceUI(presence);
+    });
+
     // Запускаем немедленно
-    await saveMyPresence();
-    await updatePartnerStatus();
+    await saveMyPresence(true);
+    const initialPresence = await window.storage.get(`presence_${partnerRole}`, null);
+    renderPresenceUI(initialPresence);
 
-    // Обновляем статус партнёра каждые 30 сек
-    setInterval(updatePartnerStatus, 30000);
+    // Heartbeat: обновляем своё присутствие каждые 30 сек пока приложение открыто
+    setInterval(() => saveMyPresence(true), 30000);
 
-    // Обновляем своё присутствие каждые 60 сек (чтобы не протухло)
-    setInterval(saveMyPresence, 60000);
+    // Периодически обновляем надпись («X мин назад») каждую минуту
+    setInterval(async () => {
+      const p = await window.storage.get(`presence_${partnerRole}`, null);
+      renderPresenceUI(p);
+    }, 60000);
 
-    // При закрытии / уходе в фон — помечаем себя как offline
+    // При сворачивании / уходе в фон — мгновенно помечаем себя как offline
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "hidden") {
-        await window.storage.set(`presence_${myRole}`, {
-          name: this.currentUser.name,
-          timestamp: Date.now(),
-          online: false
-        });
+        await saveMyPresence(false);
       } else {
-        // Вернулись — сразу обновляем
-        await saveMyPresence();
-        await updatePartnerStatus();
+        await saveMyPresence(true);
       }
+    });
+
+    window.addEventListener("pagehide", () => {
+      saveMyPresence(false);
+    });
+    window.addEventListener("beforeunload", () => {
+      saveMyPresence(false);
     });
   }
 
