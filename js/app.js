@@ -543,11 +543,16 @@ class App {
 }
 
 /**
- * Вспомогательная функция: показ всплывающего тоста
+ * Вспомогательная функция: показ всплывающего тоста (с удалением старых, чтобы не спамило)
  */
 window.showToast = function (text, type = "success", duration = 2800) {
   const container = document.getElementById("toast-container");
   if (!container) return;
+
+  // Ограничиваем количество одновременных плашек до максимум 2
+  while (container.children.length >= 2) {
+    container.removeChild(container.firstChild);
+  }
 
   const colors = {
     success: "bg-emerald-500 shadow-emerald-500/30",
