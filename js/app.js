@@ -37,6 +37,9 @@ class App {
     await window.pet.init(document.getElementById("pet-container"));
     await window.vibe.init(document.getElementById("vibe-container"), this.currentUser);
 
+    // Запускаем отслеживание присутствия (онлайн / последний вход)
+    this.startPresenceTracker();
+
     // Навигация по умолчанию
     this.switchTab("vibe");
 
@@ -114,22 +117,30 @@ class App {
    * Отрисовка главной оболочки приложения
    */
   renderMainApp() {
+    const partnerRole = this.currentUser?.role === "him" ? "her" : "him";
+    const partnerUser = CONFIG.ALLOWED_USERS.find((u) => u.role === partnerRole) || { name: "Половинка", avatar: "🌸" };
+
     document.getElementById("app-root").innerHTML = `
-      <!-- Шапка приложения -->
-      <header class="sticky top-0 z-30 bg-white/80 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-rose-100/60 dark:border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
+      <!-- Шапка приложения с онлайн-статусом половинки -->
+      <header class="sticky top-0 z-30 bg-white/85 dark:bg-zinc-950/90 backdrop-blur-xl border-b border-rose-100/60 dark:border-zinc-800 px-4 py-2.5 flex items-center justify-between">
+        <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-full bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-sm shadow-sm shadow-rose-500/20">
             ${this.currentUser.avatar}
           </div>
           <div>
-            <h1 class="text-sm font-black text-zinc-900 dark:text-zinc-100 leading-none">${CONFIG.APP_TITLE}</h1>
-            <p class="text-[11px] text-zinc-400 leading-none mt-0.5">${this.currentUser.name} • онлайн</p>
+            <h1 class="text-xs font-black text-zinc-900 dark:text-zinc-100 leading-none">${CONFIG.APP_TITLE}</h1>
+            <p class="text-[10px] text-zinc-400 leading-none mt-0.5">${this.currentUser.name}</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <div class="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Только для двоих
+
+        <!-- Плашка присутствия партнера -->
+        <div id="partner-presence-pill" class="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-rose-50/80 dark:bg-zinc-850 border border-rose-200/60 dark:border-zinc-750 transition-all select-none shadow-sm">
+          <span class="text-sm">${partnerUser.avatar}</span>
+          <div class="text-left leading-tight">
+            <span class="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block truncate max-w-[90px]">${partnerUser.name}</span>
+            <span id="partner-presence-status" class="text-[9px] text-zinc-400 font-medium block flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-zinc-300 animate-pulse"></span> Проверяем...
+            </span>
           </div>
         </div>
       </header>
@@ -252,6 +263,98 @@ class App {
     this.tg?.onEvent("themeChanged", () => {
       const scheme = this.tg?.colorScheme || "light";
       document.documentElement.classList.toggle("dark", scheme === "dark");
+    });
+  }
+
+  /**
+   * Трекер присутствия — сохраняет свой статус и читает статус партнёра
+   */
+  async startPresenceTracker() {
+    const myRole = this.currentUser?.role;
+    if (!myRole) return;
+
+    const partnerRole = myRole === "him" ? "her" : "him";
+    const partnerUser = CONFIG.ALLOWED_USERS.find(u => u.role === partnerRole) || { name: "Половинка" };
+
+    // Гендерные формы для партнёра
+    const wasLabel = myRole === "him" ? "Была" : "Был";
+    const onlineLabel = myRole === "him" ? "Онлайн сейчас 🟢" : "Онлайн сейчас 🟢";
+
+    // Сохранить собственное присутствие
+    const saveMyPresence = async () => {
+      await window.storage.set(`presence_${myRole}`, {
+        name: this.currentUser.name,
+        timestamp: Date.now(),
+        online: true
+      });
+    };
+
+    // Прочитать присутствие партнёра и обновить UI
+    let partnerWasOnline = false;
+    const updatePartnerStatus = async () => {
+      const presence = await window.storage.get(`presence_${partnerRole}`, null);
+      const statusEl = document.getElementById("partner-presence-status");
+      if (!statusEl) return;
+
+      if (!presence) {
+        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-300 mr-1"></span>Ещё не заходил${myRole === "him" ? "а" : ""}`;
+        partnerWasOnline = false;
+        return;
+      }
+
+      const diffMs = Date.now() - presence.timestamp;
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const isOnlineNow = diffMin < 2;
+
+      // Если партнёр только что пришёл онлайн — показываем тост
+      if (isOnlineNow && !partnerWasOnline) {
+        window.showToast(`💚 ${partnerUser.name} сейчас онлайн!`, "love", 3500);
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.notificationOccurred("success");
+        }
+      }
+      partnerWasOnline = isOnlineNow;
+
+      if (isOnlineNow) {
+        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1"></span>${onlineLabel}`;
+        document.getElementById("partner-presence-pill")?.classList.add("ring-1", "ring-emerald-400/40");
+      } else if (diffMin < 60) {
+        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 mr-1"></span>${wasLabel} ${diffMin} мин. назад`;
+        document.getElementById("partner-presence-pill")?.classList.remove("ring-1", "ring-emerald-400/40");
+      } else if (diffHours < 24) {
+        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-400 mr-1"></span>${wasLabel} ${diffHours} ч. назад`;
+        document.getElementById("partner-presence-pill")?.classList.remove("ring-1", "ring-emerald-400/40");
+      } else {
+        const date = new Date(presence.timestamp).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        statusEl.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-zinc-300 mr-1"></span>${wasLabel} ${date}`;
+        document.getElementById("partner-presence-pill")?.classList.remove("ring-1", "ring-emerald-400/40");
+      }
+    };
+
+    // Запускаем немедленно
+    await saveMyPresence();
+    await updatePartnerStatus();
+
+    // Обновляем статус партнёра каждые 30 сек
+    setInterval(updatePartnerStatus, 30000);
+
+    // Обновляем своё присутствие каждые 60 сек (чтобы не протухло)
+    setInterval(saveMyPresence, 60000);
+
+    // При закрытии / уходе в фон — помечаем себя как offline
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "hidden") {
+        await window.storage.set(`presence_${myRole}`, {
+          name: this.currentUser.name,
+          timestamp: Date.now(),
+          online: false
+        });
+      } else {
+        // Вернулись — сразу обновляем
+        await saveMyPresence();
+        await updatePartnerStatus();
+      }
     });
   }
 
