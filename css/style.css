@@ -1,0 +1,471 @@
+/* ==========================================================================
+   СТИЛИ И АНИМАЦИИ: TELEGRAM MINI APP «НАШ УГОЛОК»
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap');
+
+:root {
+  --app-bg: #fff5f7;
+  --app-font: 'Nunito', 'Comfortaa', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --pb-safe: env(safe-area-inset-bottom, 16px);
+}
+
+.dark {
+  --app-bg: #09090b;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body {
+  font-family: var(--app-font);
+  background-color: var(--app-bg);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* Safe areas для мобильных экранов */
+.pb-safe {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+/* Стилизация скроллбара */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(244, 63, 94, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 63, 94, 0.4);
+}
+
+/* ==========================================================================
+   СЕРДЦА В УНИСОН (ДАТЧИК ТОСКИ И РИТМА)
+   ========================================================================== */
+
+@keyframes heartLubDub {
+  0% { transform: scale(1); }
+  14% { transform: scale(1.18); }
+  28% { transform: scale(1.04); }
+  42% { transform: scale(1.24); }
+  70% { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+.heart-beat-active {
+  animation: heartLubDub var(--bpm-duration, 0.8s) ease-in-out infinite;
+  transform-origin: center;
+}
+
+.heart-pulse-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+  border: 2px solid rgba(244, 63, 94, 0.4);
+  animation: heartRingPulse var(--bpm-duration, 0.8s) cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes heartRingPulse {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.unison-card-glow {
+  box-shadow: 0 0 35px -2px rgba(244, 63, 94, 0.35), 0 0 15px rgba(251, 191, 36, 0.2), inset 0 0 25px rgba(251, 113, 133, 0.15);
+  border-color: rgba(244, 63, 94, 0.6) !important;
+}
+
+/* Анимация слияния в одно большое сердце */
+@keyframes unisonHeartMerge {
+  0% {
+    transform: scale(0.5) rotate(-15deg);
+    opacity: 0;
+    filter: drop-shadow(0 0 5px rgba(244, 63, 94, 0.5));
+  }
+  50% {
+    transform: scale(1.35) rotate(5deg);
+    opacity: 1;
+    filter: drop-shadow(0 0 35px rgba(251, 191, 36, 0.9));
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+    filter: drop-shadow(0 0 25px rgba(244, 63, 94, 0.65)) drop-shadow(0 0 45px rgba(251, 191, 36, 0.4));
+  }
+}
+
+.animate-unison-merge {
+  animation: unisonHeartMerge 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Мощная пульсация единого сердца */
+.unison-big-heart-beat {
+  animation: bigHeartPulse var(--bpm-duration, 0.6s) ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes bigHeartPulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(244, 63, 94, 0.5)); }
+  14% { transform: scale(1.22); filter: drop-shadow(0 0 30px rgba(251, 191, 36, 0.8)); }
+  28% { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(244, 63, 94, 0.6)); }
+  42% { transform: scale(1.28); filter: drop-shadow(0 0 35px rgba(244, 63, 94, 0.9)) drop-shadow(0 0 50px rgba(251, 191, 36, 0.6)); }
+  70% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(244, 63, 94, 0.5)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(244, 63, 94, 0.5)); }
+}
+
+/* Золотисто-розовое кольцо пульса для единого сердца */
+.unison-pulse-wave {
+  position: absolute;
+  inset: -14px;
+  border-radius: 9999px;
+  border: 2.5px solid rgba(251, 191, 36, 0.6);
+  animation: unisonPulseWaveAnim var(--bpm-duration, 0.6s) cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes unisonPulseWaveAnim {
+  0% { transform: scale(0.8); opacity: 0.9; border-color: rgba(244, 63, 94, 0.8); }
+  100% { transform: scale(1.5); opacity: 0; border-color: rgba(251, 191, 36, 0.1); }
+}
+
+/* ==========================================================================
+   БАНОЧКИ ЛЮБВИ (LOVE JARS)
+   ========================================================================== */
+
+.love-jar-glass {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.3) 100%);
+  border: 2px solid rgba(251, 113, 133, 0.35);
+  box-shadow: 
+    inset 0 2px 4px rgba(255, 255, 255, 0.9),
+    inset 0 -4px 8px rgba(244, 63, 94, 0.15),
+    0 10px 25px -5px rgba(244, 63, 94, 0.15);
+  backdrop-filter: blur(8px);
+  border-radius: 28px 28px 36px 36px;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.dark .love-jar-glass {
+  background: linear-gradient(135deg, rgba(39, 39, 42, 0.8) 0%, rgba(24, 24, 27, 0.5) 100%);
+  border-color: rgba(244, 63, 94, 0.3);
+  box-shadow: 
+    inset 0 2px 4px rgba(255, 255, 255, 0.1),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.5),
+    0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.jar-cork {
+  width: 52px;
+  height: 14px;
+  background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+  border-radius: 6px 6px 3px 3px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  margin: 0 auto;
+}
+
+.jar-neck {
+  width: 68px;
+  height: 10px;
+  border: 2px solid rgba(251, 113, 133, 0.4);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.dark .jar-neck {
+  background: rgba(39, 39, 42, 0.6);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.jar-glare {
+  position: absolute;
+  top: 10px;
+  left: 8px;
+  width: 10px;
+  bottom: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.1) 80%, transparent 100%);
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.jar-liquid {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, rgba(244, 63, 94, 0.4) 0%, rgba(225, 29, 72, 0.6) 100%);
+  transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 1;
+}
+
+.jar-liquid-her {
+  background: linear-gradient(180deg, rgba(236, 72, 153, 0.45) 0%, rgba(190, 24, 93, 0.65) 100%);
+}
+
+.jar-liquid-his {
+  background: linear-gradient(180deg, rgba(244, 63, 94, 0.45) 0%, rgba(225, 29, 72, 0.65) 100%);
+}
+
+.jar-heart-particle {
+  position: absolute;
+  font-size: 16px;
+  pointer-events: none;
+  z-index: 5;
+  animation: floatInJar 3s ease-in-out infinite alternate;
+}
+
+@keyframes floatInJar {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(-6deg); }
+  100% { transform: translateY(-4px) rotate(6deg); }
+}
+
+.drop-heart-anim {
+  animation: dropIntoJarAnim 0.75s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes dropIntoJarAnim {
+  0% { opacity: 0; transform: translateY(-60px) scale(0.4) rotate(-20deg); }
+  50% { opacity: 1; transform: translateY(20px) scale(1.3) rotate(15deg); }
+  80% { transform: translateY(85px) scale(0.9) rotate(-8deg); }
+  100% { opacity: 0; transform: translateY(110px) scale(0.7) rotate(0deg); }
+}
+
+/* ==========================================================================
+   АНИМАЦИИ ДЛЯ 10 ДЕЙСТВИЙ (ПОЦЕЛУИ, ОБИДКА, СОЗВОН И ДР.)
+   ========================================================================== */
+
+.kiss-mark-anim {
+  position: absolute;
+  animation: kissStamp 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  pointer-events: none;
+}
+
+@keyframes kissStamp {
+  0% { transform: scale(3) rotate(-20deg); opacity: 0; }
+  40% { transform: scale(1) rotate(0deg); opacity: 1; }
+  80% { transform: scale(1.05) rotate(5deg); opacity: 0.9; }
+  100% { transform: scale(0.95) rotate(-5deg); opacity: 0; }
+}
+
+.rain-drop {
+  position: absolute;
+  background: #38bdf8;
+  width: 2.5px;
+  height: 14px;
+  border-radius: 999px;
+  animation: rainFall 0.8s linear infinite;
+}
+
+@keyframes rainFall {
+  0% { transform: translateY(-20px); opacity: 1; }
+  100% { transform: translateY(120px); opacity: 0; }
+}
+
+.siren-pulse {
+  animation: sirenFlash 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes sirenFlash {
+  0% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+  100% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.9); }
+}
+
+.shake-screen {
+  animation: shakeAnim 0.3s ease-in-out 3;
+}
+
+@keyframes shakeAnim {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-4px, 3px); }
+  50% { transform: translate(4px, -3px); }
+  75% { transform: translate(-3px, -2px); }
+}
+
+/* ==========================================================================
+   ШТОРКА ВСПЛЫВАЮЩИХ ДЕЙСТВИЙ (BOTTOM SHEET)
+   ========================================================================== */
+
+@keyframes slideUpSheet {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDownSheet {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(100%); }
+}
+
+.animate-sheet-up {
+  animation: slideUpSheet 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-sheet-down {
+  animation: slideDownSheet 0.25s ease-in forwards;
+}
+
+/* ==========================================================================
+   АНИМАЦИИ ПЕРСОНАЖА ПИТОМЦА
+   ========================================================================== */
+
+.pet-body-breathe {
+  animation: petBreathe 3.5s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes petBreathe {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50% { transform: scale(1.03, 0.97) translateY(-3px); }
+}
+
+.pet-jump {
+  animation: petJumpAnim 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes petJumpAnim {
+  0% { transform: scale(1, 1) translateY(0); }
+  30% { transform: scale(1.15, 0.85) translateY(4px); }
+  60% { transform: scale(0.9, 1.15) translateY(-22px); }
+  80% { transform: scale(1.05, 0.95) translateY(0); }
+  100% { transform: scale(1, 1) translateY(0); }
+}
+
+.pet-blink {
+  animation: petBlinkAnim 4s infinite;
+  transform-origin: center;
+}
+
+@keyframes petBlinkAnim {
+  0%, 96%, 100% { transform: scaleY(1); }
+  98% { transform: scaleY(0.1); }
+}
+
+.pet-ears {
+  animation: earsWiggle 6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes earsWiggle {
+  0%, 90%, 100% { transform: rotate(0deg); }
+  92% { transform: rotate(-3deg); }
+  94% { transform: rotate(3deg); }
+  96% { transform: rotate(-2deg); }
+}
+
+/* ==========================================================================
+   ВСПЛЫВАЮЩИЕ ЭФФЕКТЫ (СЕРДЕЧКИ, ЕДА, МЫЛЬНЫЕ ПУЗЫРИ)
+   ========================================================================== */
+
+.floating-heart {
+  position: absolute;
+  pointer-events: none;
+  animation: floatHeartAnim 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  z-index: 30;
+}
+
+@keyframes floatHeartAnim {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.5); }
+  50% { opacity: 0.9; transform: translate(-50%, -120%) scale(1.3) rotate(-10deg); }
+  100% { opacity: 0; transform: translate(-50%, -180%) scale(1) rotate(15deg); }
+}
+
+.flying-food {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: flyFoodAnim 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  z-index: 30;
+}
+
+@keyframes flyFoodAnim {
+  0% { opacity: 0; transform: translate(-50%, -100%) scale(0.4) rotate(-30deg); }
+  40% { opacity: 1; transform: translate(-50%, -20%) scale(1.3) rotate(15deg); }
+  100% { opacity: 0; transform: translate(-50%, 60%) scale(0.2) rotate(0deg); }
+}
+
+.soap-bubble {
+  position: absolute;
+  animation: soapBubbleRise 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  z-index: 25;
+  transition: transform 0.1s;
+}
+
+.soap-bubble:active {
+  transform: scale(1.4);
+}
+
+@keyframes soapBubbleRise {
+  0% { opacity: 0; transform: translateY(20px) scale(0.6) rotate(0deg); }
+  15% { opacity: 1; }
+  85% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(-240px) scale(1.2) rotate(45deg); }
+}
+
+.animate-float {
+  animation: floatCloud 7s ease-in-out infinite;
+}
+
+.animate-float-delay {
+  animation: floatCloud 8s ease-in-out infinite;
+  animation-delay: -3.5s;
+}
+
+@keyframes floatCloud {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-8px) translateX(6px); }
+}
+
+/* ==========================================================================
+   УТИЛИТЫ И КЛАССЫ ПЕРЕХОДОВ
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.action-btn {
+  box-shadow: 0 2px 8px -2px rgba(244, 63, 94, 0.08);
+}
+.action-btn:hover {
+  transform: translateY(-1px);
+}
