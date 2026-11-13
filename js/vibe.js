@@ -49,9 +49,13 @@ class VibeController {
    */
   subscribeRealtime() {
     window.storage.subscribe("vibe_state_v2", (newState) => {
-      if (!newState || newState.stateVersion !== 2) return;
+      if (!newState) return;
       this.state = { ...this.state, ...newState };
-      this.render();
+      // Мгновенно обновляем баночки и элементы UI на лету
+      this.updateJarsUI();
+      this.updateHeartsUI();
+      this.updateMissSliderUI();
+      this.updateMoodUI();
     });
 
     // Отдельный канал мгновенных сигналов/действий (поцелуй, кусь, обнимашка)
@@ -62,6 +66,80 @@ class VibeController {
         this.handleIncomingAction(actionData);
       }
     });
+    // Канал падающих сердечек в баночку от партнера
+    window.storage.subscribe("heart_dropped", (data) => {
+      if (!data || data.senderRole === this.currentUser?.role) return;
+      if (Date.now() - data.timestamp < 10000) {
+        this.animateIncomingHeart(data.targetRole);
+      }
+    });
+  }
+
+  animateIncomingHeart(targetRole) {
+    const dropZone = document.getElementById(`jar-drop-zone-${targetRole}`);
+    if (dropZone) {
+      const dropHeart = document.createElement("div");
+      dropHeart.className = "drop-heart-anim absolute text-3xl select-none";
+      dropHeart.textContent = ["💖", "💕", "💗", "❤️", "✨"][Math.floor(Math.random() * 5)];
+      dropZone.appendChild(dropHeart);
+      setTimeout(() => dropHeart.remove(), 750);
+    }
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.impactOccurred("medium");
+    }
+    const partnerUser = CONFIG.ALLOWED_USERS.find(u => u.role !== this.currentUser?.role) || { name: "Половинка" };
+    if (window.showToast) {
+      window.showToast(`💖 ${partnerUser.name} наполнил(а) твою баночку!`, "love", 2500);
+    }
+  }
+
+  /**
+   * Обновление UI баночек без перерендера всего экрана
+   */
+  updateJarsUI() {
+    ["his", "her"].forEach((role) => {
+      const jarKey = role === "her" ? "herJar" : "hisJar";
+      const jar = this.state[jarKey];
+      if (!jar) return;
+
+      const liquid = document.getElementById(`jar-liquid-${role}`);
+      const lvlText = document.getElementById(`jar-level-text-${role}`);
+      const cntText = document.getElementById(`jar-count-${role}`);
+
+      if (liquid) liquid.style.height = `${Math.min(100, jar.level)}%`;
+      if (lvlText) lvlText.textContent = `${jar.level}%`;
+      if (cntText) cntText.textContent = jar.heartsCount;
+    });
+  }
+
+  /**
+   * Обновление пульса сердец
+   */
+  updateHeartsUI() {
+    // Если BPM изменился — можно перерисовать блок сердец или обновить стили
+    const hisDuration = CONFIG.HEART_RATES.find((r) => r.bpm === this.state.hisHeart.bpm)?.duration || "1.0s";
+    const herDuration = CONFIG.HEART_RATES.find((r) => r.bpm === this.state.herHeart.bpm)?.duration || "1.0s";
+
+    document.querySelectorAll("[data-heart-role='him']").forEach(el => {
+      el.style.setProperty("--bpm-duration", hisDuration);
+    });
+    document.querySelectorAll("[data-heart-role='her']").forEach(el => {
+      el.style.setProperty("--bpm-duration", herDuration);
+    });
+  }
+
+  updateMissSliderUI() {
+    const slider = document.getElementById("miss-slider");
+    if (slider && document.activeElement !== slider) {
+      slider.value = this.state.missLevel;
+    }
+  }
+
+  updateMoodUI() {
+    const moodEmoji = document.getElementById("current-mood-emoji");
+    const moodLabel = document.getElementById("current-mood-label");
+    if (moodEmoji && this.state.currentMood?.emoji) moodEmoji.textContent = this.state.currentMood.emoji;
+    if (moodLabel && this.state.currentMood?.label) moodLabel.textContent = this.state.currentMood.label;
   }
 
   /**
@@ -1106,6 +1184,13 @@ class VibeController {
     }
 
     this.saveState();
+
+    // Отправляем сигнал падающего сердечка партнеру в реальном времени!
+    window.storage.set("heart_dropped", {
+      targetRole: role,
+      senderRole: this.currentUser?.role,
+      timestamp: Date.now()
+    });
 
     const dropZone = document.getElementById(`jar-drop-zone-${role}`);
     if (dropZone) {
