@@ -66,22 +66,54 @@ class VibeController {
         this.handleIncomingAction(actionData);
       }
     });
+    // Подписка на прямые ветки баночек в Firebase для 100% надежного обновления счетчика
+    if (window.storage?.firebaseDb) {
+      window.storage.firebaseDb.ref("shared/vibe_state_v2/hisJar").on("value", (snap) => {
+        const val = snap.val();
+        if (val) {
+          this.state.hisJar = { ...this.state.hisJar, ...val };
+          this.updateSingleJarDOM("his", this.state.hisJar);
+        }
+      });
+      window.storage.firebaseDb.ref("shared/vibe_state_v2/herJar").on("value", (snap) => {
+        const val = snap.val();
+        if (val) {
+          this.state.herJar = { ...this.state.herJar, ...val };
+          this.updateSingleJarDOM("her", this.state.herJar);
+        }
+      });
+    }
+
     // Канал падающих сердечек в баночку от партнера
     window.storage.subscribe("heart_dropped", (data) => {
       if (!data || data.senderRole === this.currentUser?.role) return;
       if (Date.now() - data.timestamp < 10000) {
-        // Если в событии передано новое число сердечек — сразу обновляем локальный стейт
         if (data.targetRole && data.heartsCount !== undefined) {
           const jarKey = data.targetRole === "her" ? "herJar" : "hisJar";
           if (this.state[jarKey]) {
             this.state[jarKey].heartsCount = data.heartsCount;
             if (data.level !== undefined) this.state[jarKey].level = data.level;
-            this.updateJarsUI();
+            this.updateSingleJarDOM(data.targetRole, this.state[jarKey]);
           }
         }
         this.animateIncomingHeart(data.targetRole);
       }
     });
+  }
+
+  updateSingleJarDOM(role, jar) {
+    if (!jar) return;
+    const liquid = document.getElementById(`jar-liquid-${role}`);
+    const lvlText = document.getElementById(`jar-level-text-${role}`);
+    const cntText = document.getElementById(`jar-count-${role}`);
+
+    if (liquid) liquid.style.height = `${Math.min(100, jar.level)}%`;
+    if (lvlText) lvlText.textContent = `${jar.level}%`;
+    if (cntText) {
+      cntText.textContent = jar.heartsCount;
+      cntText.classList.add("scale-125", "text-rose-500", "transition-transform");
+      setTimeout(() => cntText.classList.remove("scale-125", "text-rose-500"), 300);
+    }
   }
 
   animateIncomingHeart(targetRole) {
