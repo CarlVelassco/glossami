@@ -16,6 +16,20 @@ class PetController {
     this.applyDecay();
     this.render();
     this.startAutoUpdate();
+    this.subscribeRealtime();
+  }
+
+  /**
+   * Синхронизация питомца в реальном времени
+   */
+  subscribeRealtime() {
+    window.storage.subscribe("pet_state", (newPetData) => {
+      if (!newPetData) return;
+      this.data = { ...this.data, ...newPetData };
+      this.updateStatsUI();
+      // Если поменялся наряд или имя — обновляем рендер сцены
+      this.updatePetAppearance();
+    });
   }
 
   /**
