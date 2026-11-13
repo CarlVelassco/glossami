@@ -41,6 +41,46 @@ class VibeController {
     await this.checkDailyReset();   // ← проверка нового дня
     this.render();
     this.startRelationshipTimer();
+    this.subscribeRealtime();
+  }
+
+  /**
+   * Подписка на обновление вайба и сигналов в реальном времени
+   */
+  subscribeRealtime() {
+    window.storage.subscribe("vibe_state_v2", (newState) => {
+      if (!newState || newState.stateVersion !== 2) return;
+      this.state = { ...this.state, ...newState };
+      this.render();
+    });
+
+    // Отдельный канал мгновенных сигналов/действий (поцелуй, кусь, обнимашка)
+    window.storage.subscribe("live_action", (actionData) => {
+      if (!actionData || actionData.senderRole === this.currentUser?.role) return;
+      // Если действие отправлено партнером менее 10 секунд назад
+      if (Date.now() - actionData.timestamp < 10000) {
+        this.handleIncomingAction(actionData);
+      }
+    });
+  }
+
+  /**
+   * Отображение входящего сигнала от партнера на экране
+   */
+  handleIncomingAction(actionData) {
+    const action = CONFIG.ACTIONS.find(a => a.id === actionData.actionId);
+    if (!action) return;
+
+    if (window.showToast) {
+      window.showToast(`${action.emoji} ${actionData.senderName}: ${action.title}!`, "love", 4000);
+    }
+
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.notificationOccurred("success");
+    }
+
+    // Запускаем полноэкранную анимацию на экране получателя!
+    this.showActionAnimation(action, actionData.senderName);
   }
 
   async loadState() {
@@ -74,6 +114,72 @@ class VibeController {
     const myRole       = this.currentUser?.role;
     const myJarKey     = myRole === "him" ? "hisJar" : "herJar";
     const prevNote     = this.state[myJarKey]?.note || "";
+
+    // Рекорд сердечек
+    const prevRecord = this.state.heartsRecord || 0;
+    const isNewRecord = totalYesterday > 0 && totalYesterday > prevRecord;
+    if (isNewRecord) {
+      this.state.heartsRecord = totalYesterday;
+    }
+
+    // Количество дней вместе
+    const startDate  = new Date(CONFIG.RELATIONSHIP_START_DATE);
+    const now        = new Date();
+    const daysTotal  = Math.floor((now - startDate) / 86400000);
+
+    // Проверяем круглую дату
+    const milestone = (CONFIG.MILESTONE_DAYS || []).find(d => d === daysTotal);
+
+    // Сбрасываем банки (сердечки + записки)
+    this.state.hisJar = { level: 0, heartsCount: 0, note: "", lastSender: "" };
+    this.state.herJar = { level: 0, heartsCount: 0, note: "", lastSender: "" };
+    this.state.lastResetDate = todayStr;
+    await this.saveState();
+
+    // === Формируем итоговое уведомление ===
+    const hisName = CONFIG.ALLOWED_USERS.find(u => u.role === "him")?.name || "Он";
+    const herName = CONFIG.ALLOWED_USERS.find(u => u.role === "her")?.name || "Она";
+
+    const milestoneBlock = milestone
+      ? `\n\n🎉 <b>${milestone} дней вместе — круглая дата!</b> Это невероятно — вы оба молодцы! 🥂`
+      : "";
+
+    const recordBlock = isNewRecord
+      ? `\n\n🏆 <b>НОВЫЙ РЕКОРД!</b> ${totalYesterday} сердечек за день — это лучший результат за всё время! 🎊`
+      : "";
+
+    const jarBlock = lastReset
+      ? `\n\n💝 <b>Итог вчерашнего дня:</b>\n❤️ ${hisName}: ${prevHisHearts} сердечек\n🌸 ${herName}: ${prevHerHearts} сердечек\n📊 Всего: ${totalYesterday}`
+      : "";
+
+    // Вчерашняя записка из банки текущего пользователя
+    const noteBlock = prevNote
+      ? `\n\n📝 <b>Вчерашняя записка:</b>\n<i>"${prevNote}"</i>`
+      : "";
+
+    const daysLine = milestone
+      ? `🎊 <b>День ${daysTotal} вместе — особенный!</b>`
+      : `🌅 <b>День ${daysTotal} вместе</b>`;
+
+    const msg = `${daysLine}${jarBlock}${noteBlock}${recordBlock}${milestoneBlock}`;
+
+    // Отправляем уведомление — каждый получает своё (кто первый открыл после полуночи)
+    await window.notifier.sendTo(this.currentUser.id, msg);
+  }
+
+  /**
+   * Проверка нового дня — сброс банки, новое пожелание, итоговое уведомление
+   */
+  async checkDailyReset() {
+    const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+    const lastReset = this.state.lastResetDate || null;
+
+    if (lastReset === todayStr) return; // уже сбрасывали сегодня
+
+    // Собираем итог вчерашнего дня
+    const prevHisHearts  = this.state.hisJar?.heartsCount || 0;
+    const prevHerHearts  = this.state.herJar?.heartsCount || 0;
+    const totalYesterday = prevHisHearts + prevHerHearts;
 
     // Рекорд сердечек
     const prevRecord = this.state.heartsRecord || 0;
@@ -831,6 +937,16 @@ class VibeController {
       timestamp: Date.now()
     };
     this.saveState();
+
+    // 2.1 Мгновенный сигнал через сокет в реальном времени партнеру
+    await window.storage.set("live_action", {
+      actionId: action.id,
+      emoji: action.emoji,
+      title: action.title,
+      senderName: sender.name,
+      senderRole: this.currentUser?.role,
+      timestamp: Date.now()
+    });
 
     // 3. Полноэкранный визуальный эффект
     this.showActionAnimation(action, sender.name);
