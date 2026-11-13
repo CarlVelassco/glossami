@@ -543,35 +543,33 @@ class App {
 }
 
 /**
- * Вспомогательная функция: показ всплывающего тоста (с удалением старых, чтобы не спамило)
+ * Вспомогательная функция: показ аккуратного всплывающего тоста (максимум 1 компактная плашка)
  */
-window.showToast = function (text, type = "success", duration = 2800) {
+window.showToast = function (text, type = "success", duration = 2000) {
   const container = document.getElementById("toast-container");
   if (!container) return;
 
-  // Ограничиваем количество одновременных плашек до максимум 2
-  while (container.children.length >= 2) {
-    container.removeChild(container.firstChild);
-  }
+  // Очищаем предыдущие тосты, чтобы на экране всегда была максимум ОДНА аккуратная плашка
+  container.innerHTML = "";
 
   const colors = {
-    success: "bg-emerald-500 shadow-emerald-500/30",
-    error: "bg-rose-500 shadow-rose-500/30",
-    info: "bg-blue-500 shadow-blue-500/30",
-    love: "bg-pink-500 shadow-pink-500/30"
+    success: "bg-emerald-600/90 backdrop-blur-md shadow-emerald-500/20",
+    error: "bg-rose-600/90 backdrop-blur-md shadow-rose-500/20",
+    info: "bg-zinc-800/90 backdrop-blur-md shadow-black/20",
+    love: "bg-rose-500/95 backdrop-blur-md shadow-rose-500/25"
   };
 
   const icons = { success: "✅", error: "❌", info: "ℹ️", love: "💖" };
 
   const toast = document.createElement("div");
-  toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-white text-sm font-semibold shadow-lg ${colors[type] || colors.success} animate-slide-down`;
-  toast.innerHTML = `<span>${icons[type] || "✅"}</span><span>${text}</span>`;
+  toast.className = `pointer-events-auto flex items-center gap-2 px-3.5 py-1.5 rounded-full text-white text-xs font-bold shadow-lg ${colors[type] || colors.success} animate-slide-down border border-white/20 select-none`;
+  toast.innerHTML = `<span class="text-sm">${icons[type] || "✅"}</span><span class="truncate max-w-[240px]">${text}</span>`;
 
   container.appendChild(toast);
 
   setTimeout(() => {
-    toast.classList.add("opacity-0", "transition-opacity", "duration-300");
-    setTimeout(() => toast.remove(), 300);
+    toast.classList.add("opacity-0", "transition-opacity", "duration-200");
+    setTimeout(() => toast.remove(), 200);
   }, duration);
 };
 
