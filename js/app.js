@@ -46,8 +46,8 @@ class App {
     // Навигация по умолчанию
     this.switchTab("vibe");
 
-    // Dev-панель (только в браузере вне Telegram)
-    if (this.isDevMode && !this.tg?.initData) {
+    // Dev-панель (показываем в режиме разработки или по триггеру)
+    if (this.isDevMode) {
       this.renderDevPanel();
     }
 
@@ -461,11 +461,37 @@ class App {
         </button>
       `
       ).join("")}
+
+      <div class="border-t border-zinc-800 pt-2 mt-1 flex flex-col gap-1.5">
+        <button id="dev-test-welcome" class="w-full py-1.5 px-2 bg-pink-600/30 hover:bg-pink-600/50 text-pink-200 border border-pink-500/30 rounded-xl text-[11px] font-semibold text-center transition-colors">
+          💌 Отправить мне приветствие
+        </button>
+        <button id="dev-reset-welcome" class="w-full py-1.5 px-2 bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/30 rounded-xl text-[11px] font-semibold text-center transition-colors">
+          🔄 Сбросить флаг приветствия
+        </button>
+      </div>
     `;
 
     document.body.appendChild(panel);
 
     document.getElementById("close-dev-panel")?.addEventListener("click", () => panel.remove());
+
+    // Кнопка принудительной отправки приветствия
+    document.getElementById("dev-test-welcome")?.addEventListener("click", async () => {
+      const key = `welcome_sent_${this.currentUser.role}`;
+      await window.storage.set(key, false);
+      await this.sendWelcomeIfFirstTime();
+      window.showToast("Приветствие отправлено в бот! 💌", "love");
+    });
+
+    // Кнопка сброса флага (чтобы при следующем запуске отправилось как в первый раз)
+    document.getElementById("dev-reset-welcome")?.addEventListener("click", async () => {
+      const keyHim = "welcome_sent_him";
+      const keyHer = "welcome_sent_her";
+      await window.storage.set(keyHim, false);
+      await window.storage.set(keyHer, false);
+      window.showToast("Флаги сброшены! При перезагрузке сработает заново.", "info");
+    });
 
     panel.querySelectorAll(".dev-switch-user").forEach((btn) => {
       btn.addEventListener("click", () => {
