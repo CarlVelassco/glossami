@@ -7,36 +7,28 @@ class VibeController {
     this.container = null;
     this.currentUser = null;
     this.state = {
-      // Баночки любви
+      stateVersion: 2, // Версия для сброса старых демо-данных
+      // Баночки любви (начинаются с 0)
       hisJar: {
-        level: 85,
-        heartsCount: 142,
-        note: "Ты делаешь каждый мой день ярче и теплее! 🌸",
-        lastSender: "Любимая"
+        level: 0,
+        heartsCount: 0,
+        note: "",
+        lastSender: ""
       },
       herJar: {
-        level: 90,
-        heartsCount: 156,
-        note: "Люблю тебя больше всего на свете, моё сокровище ❤️",
-        lastSender: "Любимый"
+        level: 0,
+        heartsCount: 0,
+        note: "",
+        lastSender: ""
       },
-      // Последнее отправленное действие (из 10)
-      lastAction: {
-        id: "kiss",
-        emoji: "💋",
-        title: "Чмок / Поцелуй",
-        senderName: "Любимый",
-        timestamp: Date.now() - 1000 * 60 * 15
-      },
-      hisLove: 85,
-      herLove: 90,
-      hisNote: "Ты моё главное счастье ✨",
-      herNote: "Люблю бесконечно! ❤️",
-      currentMood: { emoji: "🥰", label: "Полное счастье", desc: "Летаю в облаках от любви", author: "Мы" },
-      hisHeart: { bpm: 90, label: "Трепет", emoji: "💌" },
-      herHeart: { bpm: 90, label: "Трепет", emoji: "💌" },
-      missLevel: 60,
-      missAuthor: "Любимый",
+      lastAction: null,
+      hisLove: 0,
+      herLove: 0,
+      hisNote: "",
+      herNote: "",
+      currentMood: { emoji: "✨", label: "Выберите вайб", desc: "Нажмите на настроение ниже", author: "" },
+      hisHeart: { bpm: 60, label: "Спокойно", emoji: "☕" },
+      herHeart: { bpm: 60, label: "Спокойно", emoji: "☕" },
       moments: []
     };
     this.timerInterval = null;
@@ -52,30 +44,11 @@ class VibeController {
 
   async loadState() {
     const saved = await window.storage.get("vibe_state", null);
-    if (saved) {
+    if (saved && saved.stateVersion === 2) {
       this.state = { ...this.state, ...saved };
-      if (!this.state.hisHeart) {
-        this.state.hisHeart = { bpm: 90, label: "Трепет", emoji: "💌" };
-      }
-      if (!this.state.herHeart) {
-        this.state.herHeart = { bpm: 90, label: "Трепет", emoji: "💌" };
-      }
-      if (!this.state.hisJar) {
-        this.state.hisJar = {
-          level: this.state.hisLove || 85,
-          heartsCount: 120,
-          note: this.state.hisNote || "Люблю тебя!",
-          lastSender: "Любимая"
-        };
-      }
-      if (!this.state.herJar) {
-        this.state.herJar = {
-          level: this.state.herLove || 90,
-          heartsCount: 130,
-          note: this.state.herNote || "Ты моё счастье!",
-          lastSender: "Любимый"
-        };
-      }
+    } else {
+      // Сброс старых демо-данных на чистые нули
+      await this.saveState();
     }
   }
 
@@ -224,7 +197,7 @@ class VibeController {
 
   renderJarHTML(role, user, jarData) {
     const isHer = role === "her";
-    const heightPercent = Math.min(100, Math.max(10, jarData.level));
+    const heightPercent = Math.min(100, Math.max(0, jarData.level));
     const liquidClass = isHer ? "jar-liquid-her" : "jar-liquid-his";
 
     const isMyJar = this.currentUser?.role === role;
@@ -253,10 +226,14 @@ class VibeController {
             <div id="jar-liquid-${role}" class="jar-liquid ${liquidClass}" style="height: ${heightPercent}%;"></div>
 
             <div class="absolute inset-0 pointer-events-none overflow-hidden z-10">
-              <span class="jar-heart-particle" style="left: 20%; bottom: 15%; animation-delay: 0s;">${floatingHearts[0]}</span>
-              <span class="jar-heart-particle" style="right: 22%; bottom: 35%; animation-delay: 0.8s;">${floatingHearts[1]}</span>
-              <span class="jar-heart-particle" style="left: 35%; bottom: 55%; animation-delay: 1.6s;">${floatingHearts[2]}</span>
-              <span class="jar-heart-particle" style="right: 30%; bottom: 20%; animation-delay: 2.2s;">${floatingHearts[3]}</span>
+              ${
+                jarData.heartsCount > 0
+                  ? `<span class="jar-heart-particle" style="left: 20%; bottom: 15%; animation-delay: 0s;">${floatingHearts[0]}</span>
+                     <span class="jar-heart-particle" style="right: 22%; bottom: 35%; animation-delay: 0.8s;">${floatingHearts[1]}</span>
+                     <span class="jar-heart-particle" style="left: 35%; bottom: 55%; animation-delay: 1.6s;">${floatingHearts[2]}</span>
+                     <span class="jar-heart-particle" style="right: 30%; bottom: 20%; animation-delay: 2.2s;">${floatingHearts[3]}</span>`
+                  : ""
+              }
             </div>
 
             <div class="absolute inset-x-2 bottom-3 z-20 flex flex-col items-center text-center">
@@ -293,7 +270,7 @@ class VibeController {
             <span class="text-[9px] text-zinc-400">${canIFill ? "написать ✍️" : "прочесть 💌"}</span>
           </div>
           <p id="jar-note-text-${role}" class="text-[11px] font-medium text-zinc-700 dark:text-zinc-200 line-clamp-2 italic">
-            "${jarData.note || 'Люблю тебя!'}"
+            ${jarData.note ? `"${jarData.note}"` : (canIFill ? "Оставить первую записку ✍️" : "Здесь пока пусто 💌")}
           </p>
         </button>
       </div>
