@@ -1,0 +1,99 @@
+name: 🤖 Bot Message Cleaner
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # запускается каждые 30 минут
+  workflow_dispatch:           # можно запустить вручную
+
+concurrency:
+  group: bot-cleaner
+  cancel-in-progress: true    # отменяет старый запуск при новом старте
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 32
+
+    steps:
+      - name: Run bot cleaner (long-poll + delete user messages)
+        run: |
+          python3 << 'PYEOF'
+          import urllib.request, urllib.parse, json, time
+
+          TOKEN   = "9039695636:AAFu8_mT2fxJ29cvR3XeT6YpkNzRn2r1U00"
+          HIM     = 923013813
+          HER     = 7918071171
+          ALLOWED = {HIM, HER}
+          BASE    = f"https://api.telegram.org/bot{TOKEN}"
+
+          def api(method, params=None, post_data=None):
+              url = f"{BASE}/{method}"
+              if params:
+                  url += "?" + urllib.parse.urlencode(params)
+              try:
+                  if post_data:
+                      data = json.dumps(post_data).encode()
+                      req = urllib.request.Request(url, data=data,
+                            headers={"Content-Type": "application/json"})
+                  else:
+                      req = urllib.request.Request(url)
+                  with urllib.request.urlopen(req, timeout=35) as r:
+                      return json.loads(r.read())
+              except Exception as e:
+                  print(f"[API error] {method}: {e}")
+                  return {}
+
+          def delete_msg(chat_id, msg_id):
+              r = api("deleteMessage", {"chat_id": chat_id, "message_id": msg_id})
+              ok = r.get("result", False)
+              print(f"  🗑  Deleted msg {msg_id} from {chat_id}: {ok}")
+              return ok
+
+          offset    = None
+          end_time  = time.time() + 1740   # работаем 29 минут
+          print("🚀 Bot cleaner started. Will run for 29 min.")
+
+          while time.time() < end_time:
+              params = {"timeout": 20, "limit": 100}
+              if offset:
+                  params["offset"] = offset
+
+              result  = api("getUpdates", params)
+              updates = result.get("result", [])
+
+              for u in updates:
+                  offset = u["update_id"] + 1
+                  msg    = u.get("message") or u.get("edited_message")
+                  if not msg:
+                      continue
+
+                  from_id  = msg.get("from", {}).get("id")
+                  chat_id  = msg["chat"]["id"]
+                  msg_id   = msg["message_id"]
+                  text     = msg.get("text", "")
+
+                  if from_id not in ALLOWED:
+                      continue
+
+                  # Удаляем сообщение пользователя
+                  delete_msg(chat_id, msg_id)
+
+                  # Если написал /start — отвечаем приветствием
+                  if text.strip() == "/start":
+                      who     = "него" if from_id == HIM else "неё"
+                      partner = HER   if from_id == HIM else HIM
+                      welcome = (
+                          "🌸 *Наш Уголок* открыт!\n\n"
+                          "Нажми кнопку *💌 Написать* рядом с полем ввода, "
+                          "чтобы войти в приложение.\n\n"
+                          "_Этот чат — только для уведомлений. "
+                          "Твои сообщения здесь автоматически удаляются_ 🤫"
+                      )
+                      api("sendMessage", post_data={
+                          "chat_id":    chat_id,
+                          "text":       welcome,
+                          "parse_mode": "Markdown"
+                      })
+
+          print("✅ Cleaner session done.")
+          PYEOF
