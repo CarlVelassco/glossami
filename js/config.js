@@ -36,6 +36,18 @@ const CONFIG = {
   // Режим разработки (в браузере вне Telegram)
   DEV_MODE: false,
 
+  // Конфигурация Firebase Realtime Database для мгновенной синхронизации двоих
+  FIREBASE: {
+    apiKey: "AIzaSyCp8lZJciOazUugia3rd0IML5CS6BT3ky8",
+    authDomain: "mylove-11c4c.firebaseapp.com",
+    databaseURL: "https://mylove-11c4c-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "mylove-11c4c",
+    storageBucket: "mylove-11c4c.firebasestorage.app",
+    messagingSenderId: "743091752980",
+    appId: "1:743091752980:web:0a8f229b183c521f00d701",
+    measurementId: "G-77DSMMZP43"
+  },
+
   // ==========================================================================
   // 10 ИНТЕРАКТИВНЫХ ДЕЙСТВИЙ И СИГНАЛОВ
   // ==========================================================================
