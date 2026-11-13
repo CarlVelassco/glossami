@@ -201,7 +201,10 @@ const CONFIG = {
     { level: 60, emoji: "🥺", title: "Очень не хватает тебя", color: "text-pink-400" },
     { level: 80, emoji: "💔", title: "Сильно-сильно скучаю", color: "text-rose-500" },
     { level: 100, emoji: "😭💖", title: "Скучаю безумно, срочно нужен созвон!", color: "text-red-500" }
-  ]
+  ],
+
+  // Круглые даты для особых поздравлений (в днях)
+  MILESTONE_DAYS: [7, 14, 21, 30, 50, 60, 75, 100, 150, 200, 250, 300, 365, 500, 730]
 };
 
 window.CONFIG = CONFIG;
