@@ -70,6 +70,15 @@ class VibeController {
     window.storage.subscribe("heart_dropped", (data) => {
       if (!data || data.senderRole === this.currentUser?.role) return;
       if (Date.now() - data.timestamp < 10000) {
+        // Если в событии передано новое число сердечек — сразу обновляем локальный стейт
+        if (data.targetRole && data.heartsCount !== undefined) {
+          const jarKey = data.targetRole === "her" ? "herJar" : "hisJar";
+          if (this.state[jarKey]) {
+            this.state[jarKey].heartsCount = data.heartsCount;
+            if (data.level !== undefined) this.state[jarKey].level = data.level;
+            this.updateJarsUI();
+          }
+        }
         this.animateIncomingHeart(data.targetRole);
       }
     });
@@ -1175,7 +1184,7 @@ class VibeController {
     }, 2100);
   }
 
-  dropHeartIntoJar(role) {
+  async dropHeartIntoJar(role) {
     if (window.Telegram?.WebApp?.HapticFeedback) {
       window.Telegram.WebApp.HapticFeedback.impactOccurred("medium");
     }
@@ -1193,12 +1202,27 @@ class VibeController {
       this.state.hisLove = jar.level;
     }
 
+    // Мгновенно обновляем счетчик и уровень на своем экране
+    this.updateJarsUI();
+
+    // Мгновенная атомарная запись только этой баночки в Firebase (без конфликта затирания)
+    if (window.storage?.firebaseDb) {
+      try {
+        window.storage.firebaseDb.ref(`shared/vibe_state_v2/${jarKey}`).set(jar);
+        window.storage.firebaseDb.ref(`shared/vibe_state_v2/${role === "her" ? "herLove" : "hisLove"}`).set(jar.level);
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
     this.saveState();
 
     // Отправляем сигнал падающего сердечка партнеру в реальном времени!
     window.storage.set("heart_dropped", {
       targetRole: role,
       senderRole: this.currentUser?.role,
+      heartsCount: jar.heartsCount,
+      level: jar.level,
       timestamp: Date.now()
     });
 
