@@ -21,12 +21,17 @@ class StorageManager {
   initFirebase() {
     if (window.firebase && window.CONFIG?.FIREBASE?.databaseURL) {
       try {
-        if (!firebase.apps.length) {
+        if (!firebase.apps || !firebase.apps.length) {
           firebase.initializeApp(window.CONFIG.FIREBASE);
         }
         this.firebaseDb = firebase.database();
         this.isFirebaseReady = true;
         console.log("[StorageManager] 🔥 Firebase Realtime Database connected!");
+
+        // Если были отложенные подписки до готовности
+        this.listeners.forEach((cbs, key) => {
+          this.attachFirebaseListener(key);
+        });
       } catch (err) {
         console.warn("[StorageManager] Firebase init error:", err);
       }
@@ -35,46 +40,38 @@ class StorageManager {
     }
   }
 
+  attachFirebaseListener(key) {
+    if (!this.isFirebaseReady || !this.firebaseDb) return;
+    const sanitizedKey = this.sanitizeKey(key);
+    const dbRef = this.firebaseDb.ref(`shared/${sanitizedKey}`);
+
+    dbRef.on("value", (snapshot) => {
+      const val = snapshot.val();
+      if (val !== null && val !== undefined) {
+        this.cache.set(key, val);
+        try {
+          localStorage.setItem(`app_${key}`, JSON.stringify(val));
+        } catch (e) {}
+
+        const cbs = this.listeners.get(key);
+        if (cbs) {
+          cbs.forEach((cb) => {
+            try { cb(val); } catch (err) { console.error(err); }
+          });
+        }
+      }
+    });
+  }
+
   /**
    * Подписка на изменение ключа в реальном времени (WebSockets)
    */
   subscribe(key, callback) {
     if (!this.listeners.has(key)) {
       this.listeners.set(key, new Set());
+      this.attachFirebaseListener(key);
     }
     this.listeners.get(key).add(callback);
-
-    // Если подключен Firebase — ставим realtime listener на ветку
-    if (this.isFirebaseReady && this.firebaseDb) {
-      const sanitizedKey = this.sanitizeKey(key);
-      const dbRef = this.firebaseDb.ref(`shared/${sanitizedKey}`);
-      
-      const onValueChange = (snapshot) => {
-        const val = snapshot.val();
-        if (val !== null && val !== undefined) {
-          this.cache.set(key, val);
-          try {
-            localStorage.setItem(`app_${key}`, JSON.stringify(val));
-          } catch (e) {}
-          
-          // Оповещаем подписчиков
-          const cbs = this.listeners.get(key);
-          if (cbs) {
-            cbs.forEach(cb => {
-              try { cb(val); } catch (err) { console.error(err); }
-            });
-          }
-        }
-      };
-
-      dbRef.on("value", onValueChange);
-
-      return () => {
-        const cbs = this.listeners.get(key);
-        if (cbs) cbs.delete(callback);
-        dbRef.off("value", onValueChange);
-      };
-    }
 
     return () => {
       const cbs = this.listeners.get(key);
@@ -103,7 +100,7 @@ class StorageManager {
    * Получить значение по ключу (Promise)
    */
   async get(key, defaultValue = null) {
-    // 1. Проверяем Firebase если готов
+    // 1. Сначала пробуем получить свежайшие данные из Firebase
     if (this.isFirebaseReady && this.firebaseDb) {
       try {
         const sanitizedKey = this.sanitizeKey(key);
@@ -165,12 +162,11 @@ class StorageManager {
       localStorage.setItem(`app_${key}`, jsonStr);
     } catch (e) {}
 
-    // 2. Отправляем в Firebase Realtime Database (мгновенно летит партнеру)
+    // 2. Отправляем в Firebase Realtime Database
     if (this.isFirebaseReady && this.firebaseDb) {
       try {
         const sanitizedKey = this.sanitizeKey(key);
-        // Не блокируем UI ожиданием сетевого ответа, Firebase синхронизирует в фоне через сокет
-        this.firebaseDb.ref(`shared/${sanitizedKey}`).set(value);
+        await this.firebaseDb.ref(`shared/${sanitizedKey}`).set(value);
       } catch (e) {
         console.warn(`[StorageManager] Firebase set error for '${key}':`, e);
       }
