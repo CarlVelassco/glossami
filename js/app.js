@@ -62,7 +62,7 @@ class App {
 
     // В реальном Telegram — берём ID из initDataUnsafe
     if (tgUser?.id) {
-      const found = CONFIG.ALLOWED_USERS.find((u) => u.id === tgUser.id);
+      const found = CONFIG.ALLOWED_USERS.find((u) => String(u.id) === String(tgUser.id));
       if (found) {
         this.currentUser = { ...found, telegramName: tgUser.first_name };
         return true;
