@@ -1,5 +1,6 @@
 /* ==========================================================================
-   МОДУЛЬ ХРАНИЛИЩА (TELEGRAM CLOUD STORAGE + LOCAL STORAGE FALLBACK)
+   МОДУЛЬ ХРАНИЛИЩА (FIREBASE REALTIME DATABASE + LOCALSTORAGE + CLOUDSTORAGE)
+   Мгновенная синхронизация в реальном времени между двумя устройствами
    ========================================================================== */
 
 class StorageManager {
@@ -7,52 +8,134 @@ class StorageManager {
     this.tg = window.Telegram?.WebApp;
     this.hasCloudStorage = Boolean(this.tg?.CloudStorage && typeof this.tg.CloudStorage.getItem === "function");
     this.cache = new Map();
-    this.listeners = new Set();
-    console.log(`[StorageManager] Mode: ${this.hasCloudStorage ? "Telegram CloudStorage" : "localStorage Fallback"}`);
+    this.listeners = new Map(); // key -> Set(callbacks)
+    this.firebaseDb = null;
+    this.isFirebaseReady = false;
+
+    this.initFirebase();
   }
 
   /**
-   * Подписаться на события изменения состояния
+   * Инициализация Firebase Realtime Database
    */
-  subscribe(callback) {
-    this.listeners.add(callback);
-    return () => this.listeners.delete(callback);
+  initFirebase() {
+    if (window.firebase && window.CONFIG?.FIREBASE?.databaseURL) {
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(window.CONFIG.FIREBASE);
+        }
+        this.firebaseDb = firebase.database();
+        this.isFirebaseReady = true;
+        console.log("[StorageManager] 🔥 Firebase Realtime Database connected!");
+      } catch (err) {
+        console.warn("[StorageManager] Firebase init error:", err);
+      }
+    } else {
+      console.warn("[StorageManager] Firebase SDK or config missing. Using fallback storage.");
+    }
+  }
+
+  /**
+   * Подписка на изменение ключа в реальном времени (WebSockets)
+   */
+  subscribe(key, callback) {
+    if (!this.listeners.has(key)) {
+      this.listeners.set(key, new Set());
+    }
+    this.listeners.get(key).add(callback);
+
+    // Если подключен Firebase — ставим realtime listener на ветку
+    if (this.isFirebaseReady && this.firebaseDb) {
+      const sanitizedKey = this.sanitizeKey(key);
+      const dbRef = this.firebaseDb.ref(`shared/${sanitizedKey}`);
+      
+      const onValueChange = (snapshot) => {
+        const val = snapshot.val();
+        if (val !== null && val !== undefined) {
+          this.cache.set(key, val);
+          try {
+            localStorage.setItem(`app_${key}`, JSON.stringify(val));
+          } catch (e) {}
+          
+          // Оповещаем подписчиков
+          const cbs = this.listeners.get(key);
+          if (cbs) {
+            cbs.forEach(cb => {
+              try { cb(val); } catch (err) { console.error(err); }
+            });
+          }
+        }
+      };
+
+      dbRef.on("value", onValueChange);
+
+      return () => {
+        const cbs = this.listeners.get(key);
+        if (cbs) cbs.delete(callback);
+        dbRef.off("value", onValueChange);
+      };
+    }
+
+    return () => {
+      const cbs = this.listeners.get(key);
+      if (cbs) cbs.delete(callback);
+    };
+  }
+
+  sanitizeKey(key) {
+    return key.replace(/[.#$[\]]/g, "_");
   }
 
   notify(key, value) {
-    this.listeners.forEach((cb) => {
-      try {
-        cb(key, value);
-      } catch (e) {
-        console.error("[StorageManager] Error in listener:", e);
-      }
-    });
+    const cbs = this.listeners.get(key);
+    if (cbs) {
+      cbs.forEach((cb) => {
+        try {
+          cb(value);
+        } catch (e) {
+          console.error("[StorageManager] Error in listener:", e);
+        }
+      });
+    }
   }
 
   /**
    * Получить значение по ключу (Promise)
    */
   async get(key, defaultValue = null) {
+    // 1. Проверяем Firebase если готов
+    if (this.isFirebaseReady && this.firebaseDb) {
+      try {
+        const sanitizedKey = this.sanitizeKey(key);
+        const snapshot = await this.firebaseDb.ref(`shared/${sanitizedKey}`).once("value");
+        const val = snapshot.val();
+        if (val !== null && val !== undefined) {
+          this.cache.set(key, val);
+          return val;
+        }
+      } catch (e) {
+        console.warn(`[StorageManager] Firebase get error for '${key}':`, e);
+      }
+    }
+
+    // 2. Проверяем кэш в памяти
     if (this.cache.has(key)) {
       return this.cache.get(key);
     }
 
+    // 3. Fallback: Telegram CloudStorage
     try {
       let raw = null;
       if (this.hasCloudStorage) {
         raw = await new Promise((resolve) => {
           this.tg.CloudStorage.getItem(key, (err, result) => {
-            if (err) {
-              console.warn(`[StorageManager] CloudStorage getItem error for '${key}':`, err);
-              resolve(null);
-            } else {
-              resolve(result);
-            }
+            if (err) resolve(null);
+            else resolve(result);
           });
         });
       }
 
-      // Если в CloudStorage пусто или ошибка — пробуем localStorage
+      // 4. Fallback: localStorage
       if (raw === null || raw === undefined || raw === "") {
         raw = localStorage.getItem(`app_${key}`);
       }
@@ -71,31 +154,31 @@ class StorageManager {
   }
 
   /**
-   * Записать значение по ключу (Promise)
+   * Записать значение по ключу (Promise + Мгновенная синхронизация)
    */
   async set(key, value) {
     this.cache.set(key, value);
     const jsonStr = JSON.stringify(value);
 
-    // Всегда пишем в localStorage как локальный кэш
+    // 1. Пишем в локальный кэш
     try {
       localStorage.setItem(`app_${key}`, jsonStr);
-    } catch (e) {
-      console.warn("[StorageManager] localStorage write error:", e);
+    } catch (e) {}
+
+    // 2. Отправляем в Firebase Realtime Database (мгновенно летит партнеру)
+    if (this.isFirebaseReady && this.firebaseDb) {
+      try {
+        const sanitizedKey = this.sanitizeKey(key);
+        // Не блокируем UI ожиданием сетевого ответа, Firebase синхронизирует в фоне через сокет
+        this.firebaseDb.ref(`shared/${sanitizedKey}`).set(value);
+      } catch (e) {
+        console.warn(`[StorageManager] Firebase set error for '${key}':`, e);
+      }
     }
 
-    // Если доступен Telegram CloudStorage — пишем в облако Telegram
+    // 3. Сохраняем в Telegram CloudStorage
     if (this.hasCloudStorage) {
-      await new Promise((resolve) => {
-        this.tg.CloudStorage.setItem(key, jsonStr, (err, stored) => {
-          if (err) {
-            console.warn(`[StorageManager] CloudStorage setItem error for '${key}':`, err);
-            resolve(false);
-          } else {
-            resolve(stored);
-          }
-        });
-      });
+      this.tg.CloudStorage.setItem(key, jsonStr, () => {});
     }
 
     this.notify(key, value);
@@ -123,4 +206,3 @@ class StorageManager {
 
 // Экземпляр синглтона
 window.storage = new StorageManager();
-
