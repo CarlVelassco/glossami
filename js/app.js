@@ -40,6 +40,9 @@ class App {
     // Запускаем отслеживание присутствия (онлайн / последний вход)
     this.startPresenceTracker();
 
+    // Первый запуск — отправляем милое приветствие в бот
+    await this.sendWelcomeIfFirstTime();
+
     // Навигация по умолчанию
     this.switchTab("vibe");
 
@@ -264,6 +267,79 @@ class App {
       const scheme = this.tg?.colorScheme || "light";
       document.documentElement.classList.toggle("dark", scheme === "dark");
     });
+  }
+
+  /**
+   * Первый запуск — отправляем милую приветственную записку в бот
+   */
+  async sendWelcomeIfFirstTime() {
+    const key = `welcome_sent_${this.currentUser.role}`;
+    const alreadySent = await window.storage.get(key, false);
+    if (alreadySent) return;
+
+    const isHer = this.currentUser.role === "her";
+    const hisName = CONFIG.ALLOWED_USERS.find(u => u.role === "him")?.name || "Любимый";
+    const herName = CONFIG.ALLOWED_USERS.find(u => u.role === "her")?.name || "Любимая";
+
+    // Два разных текста: для него и для неё
+    const msgHer = `
+🌸 <b>Привет, моя ${herName}!</b>
+
+Я сделал нам своё маленькое уютное место — только для двоих 💕
+
+<b>Вот что здесь есть:</b>
+
+🫙 <b>Баночки любви</b> — я наполняю твою баночку сердечками, а ты моё. Чем больше — тем теплее на душе 🥰
+
+💌 <b>Наши сигналы</b> — кнопка внизу. Отправь мне поцелуй, обнимашку или «хочу на ручки» одним тапом, и я сразу почувствую ❤️
+
+🐾 <b>Питомец</b> — у нас есть общий котик! Корми его, играй с ним и одевай 🐱
+
+⏱ <b>Счётчик</b> — показывает сколько мы вместе. Каждая секунда с тобой — сокровище ✨
+
+<b>Как открыть приложение:</b>
+Нажми кнопку <b>💌 Написать</b> рядом с полем ввода внизу — и ты сразу попадёшь в наш уголок 🏠
+
+<i>P.S. Этот чат — только для уведомлений. Я тут не читаю сообщения 🤫 Всё общение — через приложение!</i>
+
+С любовью, твой ${hisName} 💖
+`.trim();
+
+    const msgHim = `
+💙 <b>Привет, ${hisName}!</b>
+
+Наш уголок настроен и готов к работе 🎉
+
+<b>Что здесь будет появляться:</b>
+• 💝 Уведомления о действиях ${herName}
+• 🌅 Ежедневный итог с количеством сердечек
+• 🏆 Новые рекорды и круглые даты
+• 💚 Статус онлайн когда ${herName} открывает приложение
+
+Нажми <b>💌 Написать</b> рядом с полем ввода чтобы открыть приложение 🏠
+`.trim();
+
+    const text = isHer ? msgHer : msgHim;
+
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: this.currentUser.id,
+          text,
+          parse_mode: "HTML",
+          disable_web_page_preview: true
+        })
+      });
+      const data = await r.json();
+      if (data.ok) {
+        await window.storage.set(key, true);
+        console.log("[App] Welcome message sent to", this.currentUser.name);
+      }
+    } catch (e) {
+      console.warn("[App] Could not send welcome message:", e);
+    }
   }
 
   /**
