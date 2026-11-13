@@ -87,9 +87,15 @@ class VibeController {
     if (window.Telegram?.WebApp?.HapticFeedback) {
       window.Telegram.WebApp.HapticFeedback.impactOccurred("medium");
     }
-    const partnerUser = CONFIG.ALLOWED_USERS.find(u => u.role !== this.currentUser?.role) || { name: "Половинка" };
-    if (window.showToast) {
-      window.showToast(`💖 ${partnerUser.name} наполнил(а) твою баночку!`, "love", 2500);
+    
+    // Показываем плашку только один раз с защитой от спама
+    const now = Date.now();
+    if (!this._lastIncomingToast || now - this._lastIncomingToast > 4000) {
+      this._lastIncomingToast = now;
+      const partnerUser = CONFIG.ALLOWED_USERS.find(u => u.role !== this.currentUser?.role) || { name: "Половинка" };
+      if (window.showToast) {
+        window.showToast(`💖 ${partnerUser.name} наполнил(а) твою баночку!`, "love", 2000);
+      }
     }
   }
 
@@ -108,7 +114,11 @@ class VibeController {
 
       if (liquid) liquid.style.height = `${Math.min(100, jar.level)}%`;
       if (lvlText) lvlText.textContent = `${jar.level}%`;
-      if (cntText) cntText.textContent = jar.heartsCount;
+      if (cntText) {
+        cntText.textContent = jar.heartsCount;
+        cntText.classList.add("scale-125", "text-rose-500", "transition-transform");
+        setTimeout(() => cntText.classList.remove("scale-125", "text-rose-500"), 300);
+      }
     });
   }
 
