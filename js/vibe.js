@@ -38,12 +38,13 @@ class VibeController {
     this.container = containerEl;
     this.currentUser = currentUser;
     await this.loadState();
+    await this.checkDailyReset();   // ← проверка нового дня
     this.render();
     this.startRelationshipTimer();
   }
 
   async loadState() {
-    const saved = await window.storage.get("vibe_state", null);
+    const saved = await window.storage.get("vibe_state_v2", null);
     if (saved && saved.stateVersion === 2) {
       this.state = { ...this.state, ...saved };
     } else {
@@ -53,7 +54,77 @@ class VibeController {
   }
 
   async saveState() {
-    await window.storage.set("vibe_state", this.state);
+    await window.storage.set("vibe_state_v2", this.state);
+  }
+
+  /**
+   * Проверка нового дня — сброс банки, новое пожелание, итоговое уведомление
+   */
+  async checkDailyReset() {
+    const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+    const lastReset = this.state.lastResetDate || null;
+
+    if (lastReset === todayStr) return; // уже сбрасывали сегодня
+
+    // Собираем итог вчерашнего дня
+    const prevHisHearts  = this.state.hisJar?.heartsCount || 0;
+    const prevHerHearts  = this.state.herJar?.heartsCount || 0;
+    const totalYesterday = prevHisHearts + prevHerHearts;
+    // Вчерашняя записка из банки партнёра (для текущего пользователя)
+    const myRole       = this.currentUser?.role;
+    const myJarKey     = myRole === "him" ? "hisJar" : "herJar";
+    const prevNote     = this.state[myJarKey]?.note || "";
+
+    // Рекорд сердечек
+    const prevRecord = this.state.heartsRecord || 0;
+    const isNewRecord = totalYesterday > 0 && totalYesterday > prevRecord;
+    if (isNewRecord) {
+      this.state.heartsRecord = totalYesterday;
+    }
+
+    // Количество дней вместе
+    const startDate  = new Date(CONFIG.RELATIONSHIP_START_DATE);
+    const now        = new Date();
+    const daysTotal  = Math.floor((now - startDate) / 86400000);
+
+    // Проверяем круглую дату
+    const milestone = (CONFIG.MILESTONE_DAYS || []).find(d => d === daysTotal);
+
+    // Сбрасываем банки (сердечки + записки)
+    this.state.hisJar = { level: 0, heartsCount: 0, note: "", lastSender: "" };
+    this.state.herJar = { level: 0, heartsCount: 0, note: "", lastSender: "" };
+    this.state.lastResetDate = todayStr;
+    await this.saveState();
+
+    // === Формируем итоговое уведомление ===
+    const hisName = CONFIG.ALLOWED_USERS.find(u => u.role === "him")?.name || "Он";
+    const herName = CONFIG.ALLOWED_USERS.find(u => u.role === "her")?.name || "Она";
+
+    const milestoneBlock = milestone
+      ? `\n\n🎉 <b>${milestone} дней вместе — круглая дата!</b> Это невероятно — вы оба молодцы! 🥂`
+      : "";
+
+    const recordBlock = isNewRecord
+      ? `\n\n🏆 <b>НОВЫЙ РЕКОРД!</b> ${totalYesterday} сердечек за день — это лучший результат за всё время! 🎊`
+      : "";
+
+    const jarBlock = lastReset
+      ? `\n\n💝 <b>Итог вчерашнего дня:</b>\n❤️ ${hisName}: ${prevHisHearts} сердечек\n🌸 ${herName}: ${prevHerHearts} сердечек\n📊 Всего: ${totalYesterday}`
+      : "";
+
+    // Вчерашняя записка из банки текущего пользователя
+    const noteBlock = prevNote
+      ? `\n\n📝 <b>Вчерашняя записка:</b>\n<i>"${prevNote}"</i>`
+      : "";
+
+    const daysLine = milestone
+      ? `🎊 <b>День ${daysTotal} вместе — особенный!</b>`
+      : `🌅 <b>День ${daysTotal} вместе</b>`;
+
+    const msg = `${daysLine}${jarBlock}${noteBlock}${recordBlock}${milestoneBlock}`;
+
+    // Отправляем уведомление — каждый получает своё (кто первый открыл после полуночи)
+    await window.notifier.sendTo(this.currentUser.id, msg);
   }
 
   /**
